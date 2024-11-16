@@ -28,6 +28,8 @@ class Env(BaseClass):
       self, area=(64, 64), view=(9, 9), size=(64, 64),
       reward=True, length=10000, seed=None):
     view = np.array(view if hasattr(view, '__len__') else (view, view))
+    self._og_view = view
+    view = tuple(np.array(view) + np.array([2, 8]))
     size = np.array(size if hasattr(size, '__len__') else (size, size))
     seed = np.random.randint(0, 2**31 - 1) if seed is None else seed
     self._area = area
@@ -38,12 +40,12 @@ class Env(BaseClass):
     self._seed = seed
     self._episode = 0
     self._world = engine.World(area, constants.materials, (12, 12))
-    self._textures = engine.Textures(constants.root / 'minecraft')
+    self._textures = engine.Textures(constants.root / '3d')
     item_rows = int(np.ceil(len(constants.items) / view[0]))
     self._local_view = engine.LocalView(
         self._world, self._textures, [view[0], view[1] - item_rows])
     self._item_view = engine.ItemView(
-        self._textures, [view[0], item_rows])
+        self._textures, [self._og_view[0], item_rows])
     self._sem_view = engine.SemanticView(self._world, [
         objects.Player, objects.Cow, objects.Zombie,
         objects.Skeleton, objects.Arrow, objects.Plant])
@@ -119,15 +121,17 @@ class Env(BaseClass):
 
   def render(self, size=None):
     size = size or self._size
-    unit = size // self._view
-    canvas = np.zeros(tuple(size) + (3,), np.uint8)
+    unit = size // self._og_view
+    canvas = np.zeros(tuple(size) + (4,), np.uint8)
     local_view = self._local_view(self._player, unit)
     item_view = self._item_view(self._player.inventory, unit)
+    # return local_view
     view = np.concatenate([local_view, item_view], 1)
     border = (size - (size // self._view) * self._view) // 2
     (x, y), (w, h) = border, view.shape[:2]
     canvas[x: x + w, y: y + h] = view
-    return canvas.transpose((1, 0, 2))
+    # return canvas
+    return view
 
   def _obs(self):
     return self.render()
