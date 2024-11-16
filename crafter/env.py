@@ -131,7 +131,7 @@ class Env(BaseClass):
     (x, y), (w, h) = border, view.shape[:2]
     canvas[x: x + w, y: y + h] = view
     # return canvas
-    return view
+    return view[..., :3].swapaxes(0, 1).astype(np.uint8)
 
   def _obs(self):
     return self.render()
