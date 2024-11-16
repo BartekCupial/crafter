@@ -146,7 +146,7 @@ class Env(BaseClass):
     # return canvas
     if self.greyscale:
       grayscale = np.array(rgba_to_grayscale(canvas))
-      return grayscale.transpose((1, 0, 2))
+      return grayscale.transpose((1, 0, 2)).astype(np.uint8)
     else:
       return canvas.transpose((1, 0, 2))
 
