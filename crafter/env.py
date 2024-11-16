@@ -26,7 +26,7 @@ class Env(BaseClass):
 
   def __init__(
       self, area=(64, 64), view=(9, 9), size=(64, 64),
-      reward=True, length=10000, seed=None):
+      reward=True, length=10000, seed=None, texture_path="assets"):
     view = np.array(view if hasattr(view, '__len__') else (view, view))
     self._og_view = view
     view = tuple(np.array(view) + np.array([2, 8]))
@@ -40,7 +40,7 @@ class Env(BaseClass):
     self._seed = seed
     self._episode = 0
     self._world = engine.World(area, constants.materials, (12, 12))
-    self._textures = engine.Textures(constants.root / '3d')
+    self._textures = engine.Textures(constants.root / texture_path)
     item_rows = int(np.ceil(len(constants.items) / view[0]))
     self._local_view = engine.LocalView(
         self._world, self._textures, [view[0], view[1] - item_rows])
