@@ -26,7 +26,7 @@ class Env(BaseClass):
 
   def __init__(
       self, area=(64, 64), view=(9, 9), size=(64, 64),
-      reward=True, length=10000, seed=None, texture_path="assets"):
+      reward=True, length=10000, seed=None, greyscale=False, texture_path="assets"):
     view = np.array(view if hasattr(view, '__len__') else (view, view))
     self._og_view = view
     view = tuple(np.array(view) + np.array([2, 8]))
