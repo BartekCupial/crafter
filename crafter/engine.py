@@ -176,7 +176,12 @@ class LocalView:
       texture = self._textures.get(name, unit)
       _draw(canvas, draw_pos, texture)  
 
-    top_objects = ["tree", "coal", "diamond", "iron", "stone", "wood", "table", "furnace"]
+    def apply_squash(pos):
+      return (pos * np.array([0.88, 0.77])).astype(int)
+
+    top_textures_names = ["tree", "coal", "diamond", "iron", "stone", "wood", "table", "furnace"]
+    # 1st pass draw base
+    top_textures = []
     for y in range(cols):
       for x in range(rows):
         pos = self._center + np.array([x, y]) - self._offset
@@ -186,35 +191,42 @@ class LocalView:
         translate_offset = np.array([unit[0] // 2, 0]) * int(y % 2 == 0)
         y_offset = np.array([0, (-unit[1] // 2) * y])
         top_offset = np.array([0, (-unit[1] // 2)]) 
-        x_offset = np.array([(-unit[0] // 2), 0])
-        draw_pos = (np.array([x, y]) * unit * np.array([0.88, 0.77])).astype(int) + y_offset + translate_offset
+        draw_pos = apply_squash(np.array([x, y]) * unit) + y_offset + translate_offset
 
-        if obj in top_objects:
+        if obj in top_textures_names:
           draw_texture("grass", draw_pos)
-          if obj == "tree":
-            draw_texture(obj, draw_pos + (top_offset * 1.3).astype(int))
-          else:
-            draw_texture(obj, draw_pos + (top_offset).astype(int))
+          top_textures.append(((x, y), self._world[pos]))
         else:
           draw_texture(obj, draw_pos)
+
 
     for obj in self._world.objects:
       pos = obj.pos - self._center + self._offset
       if not _inside((0, 0), pos, self._grid):
         continue
+      top_textures.append((pos, obj))
+
+    top_textures = sorted(top_textures, key=lambda x: (x[0][1], x[0][0]))
+    for (x, y), obj in top_textures:
+      if isinstance(obj, tuple):
+        texture = obj[0]
+      else:
+        texture = obj.texture
+      pos = np.array([x, y])
+      
       top_offset = np.array([0, (-unit[1] // 2)]) 
+      if texture == "tree":
+        top_offset = (top_offset * 1.3).astype(int)
       translate_offset = np.array([unit[0] // 2, 0]) * int(pos[1] % 2 == 0)
       y_offset = np.array([0, (-unit[1] // 2) * pos[1]])
-      x_offset = np.array([(-unit[0] // 2), 0])
-
-      draw_pos = (pos * unit * np.array([0.88, 0.77])).astype(int) + y_offset + translate_offset
-      draw_texture(obj.texture, draw_pos + top_offset)
+      draw_pos = apply_squash(pos * unit) + y_offset + translate_offset
+      draw_texture(texture, draw_pos + top_offset)
 
     canvas = self._light(canvas, self._world.daylight)
     if player.sleeping:
       canvas = self._sleep(canvas)
     if player.health < 1:
-      canvas = self._tint(canvas, (128, 0, 0), 0.6)
+      canvas = self._tint(canvas, (128, 0, 0, 127), 0.6)
 
     return canvas[100:shape[0]+100, 70:shape[1]-270]
 
