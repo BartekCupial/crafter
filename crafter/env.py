@@ -22,14 +22,29 @@ except ImportError:
   BaseClass = object
 
 
+def rgba_to_grayscale(rgba_array):
+    # Extract RGB and alpha channels
+    rgb = rgba_array[..., :3]
+    
+    # Convert RGB to grayscale using standard weights
+    grayscale = np.dot(rgb, [0.299, 0.587, 0.114])[..., np.newaxis]
+    
+    # Repeat grayscale value three times and add alpha
+    grayscale_rgb = np.repeat(grayscale, 3, axis=-1)  # Make 3 identical channels
+    
+    # Stack grayscale RGB with original alpha channel
+    return grayscale_rgb
+
+
 class Env(BaseClass):
 
   def __init__(
       self, area=(64, 64), view=(9, 9), size=(64, 64),
-      reward=True, length=10000, seed=None):
+      reward=True, length=10000, seed=None, texture_path="assets", greyscale=False):
     view = np.array(view if hasattr(view, '__len__') else (view, view))
     size = np.array(size if hasattr(size, '__len__') else (size, size))
     seed = np.random.randint(0, 2**31 - 1) if seed is None else seed
+    self.greyscale = greyscale
     self._area = area
     self._view = view
     self._size = size
@@ -127,7 +142,12 @@ class Env(BaseClass):
     border = (size - (size // self._view) * self._view) // 2
     (x, y), (w, h) = border, view.shape[:2]
     canvas[x: x + w, y: y + h] = view
-    return canvas.transpose((1, 0, 2))
+    # return canvas
+    if self.greyscale:
+      grayscale = np.array(rgba_to_grayscale(canvas))
+      return grayscale.transpose((1, 0, 2))
+    else:
+      return canvas.transpose((1, 0, 2))
 
   def _obs(self):
     return self.render()
