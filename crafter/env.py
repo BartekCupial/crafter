@@ -135,13 +135,14 @@ class Env(BaseClass):
   def render(self, size=None):
     size = size or self._size
     unit = size // self._view
-    canvas = np.zeros(tuple(size) + (3,), np.uint8)
+    canvas = np.zeros(tuple(size) + (4,), np.uint8)
     local_view = self._local_view(self._player, unit)
     item_view = self._item_view(self._player.inventory, unit)
     view = np.concatenate([local_view, item_view], 1)
     border = (size - (size // self._view) * self._view) // 2
     (x, y), (w, h) = border, view.shape[:2]
     canvas[x: x + w, y: y + h] = view
+    canvas = canvas[..., :3]
     # return canvas
     if self.greyscale:
       grayscale = np.array(rgba_to_grayscale(canvas))

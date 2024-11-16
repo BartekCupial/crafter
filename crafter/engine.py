@@ -165,12 +165,17 @@ class LocalView:
   def __call__(self, player, unit):
     self._unit = np.array(unit)
     self._center = np.array(player.pos)
-    canvas = np.zeros(tuple(self._grid * unit) + (3,), np.uint8) + 127
+    canvas = np.zeros(tuple(self._grid * unit) + (4,), np.uint8) + 127
+    
+    top_textures_names = ["tree", "coal", "diamond", "iron", "stone", "wood", "table", "furnace"]
     for x in range(self._grid[0]):
       for y in range(self._grid[1]):
         pos = self._center + np.array([x, y]) - self._offset
         if not _inside((0, 0), pos, self._area):
           continue
+        if self._world[pos][0] in top_textures_names:
+          texture = self._textures.get("grass", unit)
+          _draw(canvas, np.array([x, y]) * unit, texture)
         texture = self._textures.get(self._world[pos][0], unit)
         _draw(canvas, np.array([x, y]) * unit, texture)
     for obj in self._world.objects:
@@ -178,27 +183,26 @@ class LocalView:
       if not _inside((0, 0), pos, self._grid):
         continue
       texture = self._textures.get(obj.texture, unit)
-      _draw_alpha(canvas, pos * unit, texture)
+      _draw(canvas, pos * unit, texture)
     canvas = self._light(canvas, self._world.daylight)
     if player.sleeping:
       canvas = self._sleep(canvas)
-    # if player.health < 1:
-    #   canvas = self._tint(canvas, (128, 0, 0), 0.6)
+    if player.health < 1:
+      canvas = self._tint(canvas, (128, 0, 0, 127), 0.6)
     return canvas
 
   def _light(self, canvas, daylight):
     night = canvas
     if daylight < 0.5:
       night = self._noise(night, 2 * (0.5 - daylight), 0.5)
-    night = np.array(ImageEnhance.Color(
-        Image.fromarray(night.astype(np.uint8))).enhance(0.4))
-    night = self._tint(night, (0, 16, 64), 0.5)
+    night = np.array(ImageEnhance.Color(Image.fromarray(night.astype(np.uint8))).enhance(0.4))
+    night = self._tint(night, (0, 16, 64, 127), 0.5)
     return daylight * canvas + (1 - daylight) * night
 
   def _sleep(self, canvas):
     canvas = np.array(ImageEnhance.Color(
         Image.fromarray(canvas.astype(np.uint8))).enhance(0.0))
-    canvas = self._tint(canvas, (0, 0, 16), 0.5)
+    canvas = self._tint(canvas, (0, 0, 16, 127), 0.5)
     return canvas
 
   def _tint(self, canvas, color, amount):
@@ -226,7 +230,7 @@ class ItemView:
 
   def __call__(self, inventory, unit):
     unit = np.array(unit)
-    canvas = np.zeros(tuple(self._grid * unit) + (3,), np.uint8)
+    canvas = np.zeros(tuple(self._grid * unit) + (4,), np.uint8)
     for index, (item, amount) in enumerate(inventory.items()):
       if amount < 1:
         continue
@@ -238,14 +242,14 @@ class ItemView:
     pos = index % self._grid[0], index // self._grid[0]
     pos = (pos * unit + 0.1 * unit).astype(np.int32)
     texture = self._textures.get(item, 0.8 * unit)
-    _draw_alpha(canvas, pos, texture)
+    _draw(canvas, pos, texture)
 
   def _amount(self, canvas, index, amount, unit):
     pos = index % self._grid[0], index // self._grid[0]
     pos = (pos * unit + 0.4 * unit).astype(np.int32)
     text = str(amount) if amount in list(range(10)) else 'unknown'
     texture = self._textures.get(text, 0.6 * unit)
-    _draw_alpha(canvas, pos, texture)
+    _draw(canvas, pos, texture)
 
 
 class SemanticView:
@@ -269,9 +273,25 @@ def _inside(lhs, mid, rhs):
 
 def _draw(canvas, pos, texture):
   (x, y), (w, h) = pos, texture.shape[:2]
+
+  # Get the target area in the canvas
+  target_area = canvas[x:x + w, y:y + h]
+
   if texture.shape[-1] == 4:
-    texture = texture[..., :3]
-  canvas[x: x + w, y: y + h] = texture
+    # If texture has alpha channel
+    rgb = texture[..., :3]
+    alpha = texture[..., 3:4] / 255.0  # Normalize alpha to 0-1
+    
+    # New = alpha * foreground + (1 - alpha) * background
+    blended_rgb = (alpha * rgb + (1 - alpha) * target_area[..., :3])
+    blended_alpha = alpha + (1 - alpha) * (target_area[..., 3:4] / 255.0)
+
+    # Combine RGB and alpha
+    canvas[x:x + w, y:y + h] = np.concatenate([blended_rgb, blended_alpha * 255], axis=-1)
+  else:
+    # If texture has only RGB channels, assume full opacity
+    canvas[x:x + w, y:y + h, :3] = texture
+    canvas[x:x + w, y:y + h, 3] = 255
 
 def _draw_alpha(canvas, pos, texture):
   (x, y), (w, h) = pos, texture.shape[:2]
