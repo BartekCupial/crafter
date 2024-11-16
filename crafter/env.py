@@ -53,7 +53,7 @@ class Env(BaseClass):
     self._seed = seed
     self._episode = 0
     self._world = engine.World(area, constants.materials, (12, 12))
-    self._textures = engine.Textures(constants.root / 'minecraft')
+    self._textures = engine.Textures(constants.root / texture_path)
     item_rows = int(np.ceil(len(constants.items) / view[0]))
     self._local_view = engine.LocalView(
         self._world, self._textures, [view[0], view[1] - item_rows])
