@@ -83,6 +83,7 @@ class Env(BaseClass):
     return constants.actions
 
   def reset(self):
+    self.last_obs = None
     center = (self._world.area[0] // 2, self._world.area[1] // 2)
     self._episode += 1
     self._step = 0
@@ -132,17 +133,16 @@ class Env(BaseClass):
       reward = 0.0
     return obs, reward, done, info
 
-  def render(self, size=None):
+  def _render(self, size=None):
     size = size or self._size
     unit = size // self._view
-    canvas = np.zeros(tuple(size) + (4,), np.uint8)
+    canvas = np.zeros(tuple(size) + (3,), np.uint8)
     local_view = self._local_view(self._player, unit)
     item_view = self._item_view(self._player.inventory, unit)
     view = np.concatenate([local_view, item_view], 1)
     border = (size - (size // self._view) * self._view) // 2
     (x, y), (w, h) = border, view.shape[:2]
     canvas[x: x + w, y: y + h] = view
-    canvas = canvas[..., :3]
     # return canvas
     if self.greyscale:
       grayscale = np.array(rgba_to_grayscale(canvas))
@@ -150,8 +150,12 @@ class Env(BaseClass):
     else:
       return canvas.transpose((1, 0, 2))
 
+  def render(self):
+    return self.last_obs
+
   def _obs(self):
-    return self.render()
+    self.last_obs = self._render()
+    return self.last_obs
 
   def _update_time(self):
     # https://www.desmos.com/calculator/grfbc6rs3h

@@ -1,11 +1,13 @@
 import collections
 import functools
 import pathlib
+import copy
 
 import imageio.v3 as imageio
 import numpy as np
 from PIL import Image, ImageEnhance
-
+from pathlib import Path
+import open3d as o3d
 
 class AttrDict(dict):
 
@@ -161,6 +163,29 @@ class LocalView:
     self._offset = self._grid // 2
     self._area = np.array(self._world.area)
     self._center = None
+    
+    self.meshes = {}
+    for i, mesh_path in enumerate(Path("/home/bartek/Workspace/ideas/crafter/glb").iterdir()):
+        mesh = o3d.io.read_triangle_mesh(str(mesh_path), enable_post_processing=True)
+        mesh.compute_vertex_normals()
+        
+        bbox = mesh.get_axis_aligned_bounding_box()
+        scale = 1.0 / np.max(bbox.get_extent())
+        mesh.scale(scale, center=bbox.get_center())
+        mesh.translate(-mesh.get_center())
+  
+        if mesh_path.stem in ["skeleton", "player", "zombie"]:
+          mesh.scale(1.6, center=bbox.get_center())
+        elif mesh_path.stem in ["tree"]:
+          mesh.scale(1.5, center=bbox.get_center())
+          mesh.translate([0, 1.0, 0])
+        elif mesh_path.stem in ["table", "furnace"]:
+          mesh.scale(0.8, center=bbox.get_center())
+        # elif mesh_path.stem in ["cow"]:
+        #   mesh.scale(1.2, center=bbox.get_center())
+          
+        # mesh.translate([1.0 * i, 0, 0])
+        self.meshes[mesh_path.stem] = mesh 
 
   def __call__(self, player, unit):
     self._unit = np.array(unit)
@@ -168,41 +193,99 @@ class LocalView:
     canvas = np.zeros(tuple(self._grid * unit) + (4,), np.uint8) + 127
     
     top_textures_names = ["tree", "coal", "diamond", "iron", "stone", "wood", "table", "furnace"]
-    for x in range(self._grid[0]):
-      for y in range(self._grid[1]):
-        pos = self._center + np.array([x, y]) - self._offset
-        if not _inside((0, 0), pos, self._area):
-          continue
-        if self._world[pos][0] in top_textures_names:
-          texture = self._textures.get("grass", unit)
-          _draw(canvas, np.array([x, y]) * unit, texture)
-        texture = self._textures.get(self._world[pos][0], unit)
-        _draw(canvas, np.array([x, y]) * unit, texture)
+
+    mesh_world = []
+    for x in range(-2, self._grid[0] + 2):
+        for y in range(-2, self._grid[1] + 2):
+            pos = self._center + np.array([x, y]) - self._offset
+            if not _inside((0, 0), pos, self._area):
+              continue
+            
+            material = self._world[pos][0]
+            if material in top_textures_names:
+              mesh = copy.deepcopy(self.meshes[material])
+              mesh.translate([x, 1, y])
+              mesh_world.append(mesh)
+              material = "grass"
+              
+            mesh = copy.deepcopy(self.meshes[material])
+            mesh.translate([x, 0, y])
+            mesh_world.append(mesh)
+            
     for obj in self._world.objects:
       pos = obj.pos - self._center + self._offset
       if not _inside((0, 0), pos, self._grid):
         continue
-      texture = self._textures.get(obj.texture, unit)
-      _draw(canvas, pos * unit, texture)
+
+      material = obj.texture
+      if "player" in material or "arrow" in material:
+        material, dir = material.split("-")
+        mesh = copy.deepcopy(self.meshes[material])
+        if dir == "down":
+          R = mesh.get_rotation_matrix_from_xyz((0, 0, 0))
+          mesh.rotate(R, center=(0, 0, 0))
+        elif dir == "up":
+          R = mesh.get_rotation_matrix_from_xyz((0, np.pi, 0))
+          mesh.rotate(R, center=(0, 0, 0))
+        elif dir == "left":
+          R = mesh.get_rotation_matrix_from_xyz((0, -np.pi / 2.2, 0))
+          mesh.rotate(R, center=(0, 0, 0))
+        elif dir == "right":
+          R = mesh.get_rotation_matrix_from_xyz((0, np.pi / 2.2, 0))
+          mesh.rotate(R, center=(0, 0, 0))
+      else:
+        mesh = copy.deepcopy(self.meshes[material])
+      
+      x, y = pos
+      mesh.translate([x, 1, y])
+      mesh_world.append(mesh)
+    
+    width, height, *_ = canvas.shape
+    vis = o3d.visualization.Visualizer()
+    vis.create_window(width=width, height=height, visible=False)
+    
+    for mesh in mesh_world:
+      vis.add_geometry(mesh)
+
+    # Get the view control
+    view_control = vis.get_view_control()
+
+    # Set camera position and orientation
+    # Method 1: Set camera parameters directly
+    view_control.set_front([0, 1, 0.5])    # Camera looks straight down (-y direction)
+    view_control.set_lookat([4, 0, 3])    # Looking at point (4, 0, 3)
+    view_control.set_up([0, 1, 0])        # Up direction aligned with x-axis
+    view_control.set_zoom(0.3)            # Zoom level
+
+    # Render and capture
+    vis.poll_events()
+    vis.update_renderer()
+    vis.capture_screen_image("rendered_image.png")
+
+    vis.destroy_window()
+    
+    image = Image.open("rendered_image.png")
+    canvas = np.asanyarray(image)
+    
     canvas = self._light(canvas, self._world.daylight)
     if player.sleeping:
       canvas = self._sleep(canvas)
     if player.health < 1:
-      canvas = self._tint(canvas, (128, 0, 0, 127), 0.6)
-    return canvas
+      canvas = self._tint(canvas, (128, 0, 0), 0.6)
+    return canvas.transpose((1, 0, 2))
 
   def _light(self, canvas, daylight):
     night = canvas
     if daylight < 0.5:
       night = self._noise(night, 2 * (0.5 - daylight), 0.5)
     night = np.array(ImageEnhance.Color(Image.fromarray(night.astype(np.uint8))).enhance(0.4))
-    night = self._tint(night, (0, 16, 64, 127), 0.5)
+    night = self._tint(night, (0, 16, 64), 0.5)
     return daylight * canvas + (1 - daylight) * night
 
   def _sleep(self, canvas):
     canvas = np.array(ImageEnhance.Color(
         Image.fromarray(canvas.astype(np.uint8))).enhance(0.0))
-    canvas = self._tint(canvas, (0, 0, 16, 127), 0.5)
+    canvas = self._tint(canvas, (0, 0, 16), 0.5)
     return canvas
 
   def _tint(self, canvas, color, amount):
@@ -230,7 +313,7 @@ class ItemView:
 
   def __call__(self, inventory, unit):
     unit = np.array(unit)
-    canvas = np.zeros(tuple(self._grid * unit) + (4,), np.uint8)
+    canvas = np.zeros(tuple(self._grid * unit) + (3,), np.uint8)
     for index, (item, amount) in enumerate(inventory.items()):
       if amount < 1:
         continue
