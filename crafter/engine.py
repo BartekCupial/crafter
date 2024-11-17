@@ -8,6 +8,7 @@ import numpy as np
 from PIL import Image, ImageEnhance
 from pathlib import Path
 import open3d as o3d
+import tempfile
 
 class AttrDict(dict):
 
@@ -260,11 +261,12 @@ class LocalView:
     # Render and capture
     vis.poll_events()
     vis.update_renderer()
-    vis.capture_screen_image("rendered_image.png")
+    tf = tempfile.NamedTemporaryFile()
+    vis.capture_screen_image(tf.name + ".png")
 
     vis.destroy_window()
     
-    image = Image.open("rendered_image.png")
+    image = Image.open(tf.name + ".png")
     canvas = np.asanyarray(image)
     
     canvas = self._light(canvas, self._world.daylight)
