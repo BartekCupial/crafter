@@ -196,8 +196,8 @@ class LocalView:
     top_textures_names = ["tree", "coal", "diamond", "iron", "stone", "wood", "table", "furnace"]
 
     mesh_world = []
-    for x in range(-2, self._grid[0] + 2):
-        for y in range(-2, self._grid[1] + 2):
+    for x in range(self._grid[0]):
+        for y in range(self._grid[1]):
             pos = self._center + np.array([x, y]) - self._offset
             if not _inside((0, 0), pos, self._area):
               continue
@@ -256,7 +256,7 @@ class LocalView:
     view_control.set_front([0, 1, 0.5])    # Camera looks straight down (-y direction)
     view_control.set_lookat([4, 0, 3])    # Looking at point (4, 0, 3)
     view_control.set_up([0, 1, 0])        # Up direction aligned with x-axis
-    view_control.set_zoom(0.3)            # Zoom level
+    view_control.set_zoom(0.5)            # Zoom level
 
     # Render and capture
     vis.poll_events()
@@ -376,7 +376,7 @@ def _draw(canvas, pos, texture):
   else:
     # If texture has only RGB channels, assume full opacity
     canvas[x:x + w, y:y + h, :3] = texture
-    canvas[x:x + w, y:y + h, 3] = 255
+    # canvas[x:x + w, y:y + h, 3] = 255
 
 def _draw_alpha(canvas, pos, texture):
   (x, y), (w, h) = pos, texture.shape[:2]
